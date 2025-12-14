@@ -27,6 +27,7 @@ Think of it as a shared, multi-machine `git stash`.
     ```
 
 3. **Place the script in your PATH**
+
     A common location is `/usr/local/bin` or `~/.local/bin` directory that you've added to your `PATH`.
 
     ```bash
