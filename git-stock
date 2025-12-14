@@ -1,0 +1,503 @@
+#!/usr/bin/zsh
+set -o nounset
+
+# Setup
+CACHE_DIR="${HOME}/.cache/git-stock"
+
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+ERROR="${RED}Error${NC}"
+WARNING="${YELLOW}Warning${NC}"
+INFO="${BLUE}Info${NC}"
+
+# Check
+if ! git rev-parse --is-inside-work-tree &> /dev/null; then
+    echo "${ERROR}: Not a git repository." >&2
+    exit 1
+fi
+
+STOCK_REPO=$(git config get stock.repo)
+
+if [[ -z "$STOCK_REPO" ]]; then
+    echo "${ERROR}: 'stock.repo' is not set." >&2
+    echo "${INFO}: Set it with 'git config set stock.repo <repo_url>'."
+    exit 1
+fi
+
+ORIGIN_URL=$(git remote get-url origin 2> /dev/null)
+
+if [[ -z "$ORIGIN_URL" ]]; then
+    echo "${ERROR}: This repository has no remote 'origin'." >&2
+    exit 1
+fi
+
+PROJECT_ID=$(echo $ORIGIN_URL | sed -n 's/.*:\([^.]*\)\..*/\1/p')
+
+if [[ -z "$PROJECT_ID" ]]; then
+    echo "${ERROR}: Could not extract Owner/Repository name from origin URL." >&2
+    exit 1
+fi
+
+REMOTE_REF="refs/heads/${PROJECT_ID}"
+
+# Utils
+function ensure_cache() {
+    if [[ ! -d "$CACHE_DIR" ]]; then
+        echo "${INFO}: Cloning stock repo to ${CACHE_DIR}..."
+        git clone --bare "$STOCK_REPO" "$CACHE_DIR" &> /dev/null
+    else
+        echo "${INFO}: Updating cache..."
+        # Ensure cache remote url sync with `$STOCK_REPO`
+        git --git-dir="$CACHE_DIR" remote set-url origin "$STOCK_REPO" &> /dev/null
+        git --git-dir="$CACHE_DIR" fetch --prune origin "+${REMOTE_REF}/*:${REMOTE_REF}/*" &> /dev/null
+    fi
+}
+
+# WARN: Use after ensure_cache
+# This function will not call `ensure_cache` on its own.
+function get_max_id() {
+    git --git-dir="$CACHE_DIR" for-each-ref --format='%(refname:short)' "${REMOTE_REF}/*" | \
+        sed "s|^${PROJECT_ID}/||" | \
+        grep -E '^[0-9]+$' | \
+        sort -rn | head -1
+}
+
+# WARN: Use after ensure_cache
+# This function will not call `ensure_cache` on its own.
+function get_next_id() {
+    local max_id=$(get_max_id)
+
+    if [[ -z "$max_id" ]]; then
+        echo "0"
+    else
+        echo $((max_id + 1))
+    fi
+}
+
+# WARN: Use after ensure_cache
+# This function will not call `ensure_cache` on its own.
+function resolve_target_id() {
+    local input_id="${1:-}"
+
+    case "$input_id" in
+        all)
+            local all_ids=$(git --git-dir="$CACHE_DIR" for-each-ref --format='%(refname:short)' "${REMOTE_REF}/*" | \
+                sed "s|^${PROJECT_ID}/||" | \
+                grep -E '^[0-9]+$' | \
+                sort -n)
+
+            if [[ -z "$all_ids" ]]; then
+                echo "${INFO}: No stocks found for ${PROJECT_ID}." >&2
+                return 1
+            fi
+
+            echo "$all_ids"
+            ;;
+        "")
+            local max_id=$(get_max_id)
+
+            if [[ -z "$max_id" ]]; then
+                echo "${INFO}: No stocks found for ${PROJECT_ID}." >&2
+                return 1
+            fi
+
+            echo "$max_id"
+            ;;
+        *[!0-9]*)
+            echo "${ERROR}: Invalid Stock ID '${input_id}'. Only 'all' or numeric IDs are accepted." >&2
+            return 1
+            ;;
+        *)
+            local ref="${REMOTE_REF}/${input_id}"
+
+            if ! git --git-dir="$CACHE_DIR" rev-parse --verify "$ref" &> /dev/null; then
+                echo "${ERROR}: Stock ID '${input_id}' not found." >&2
+                return 1
+            fi
+
+            echo "$input_id"
+            ;;
+    esac
+}
+
+function preserve_fetch_head() {
+    local fetch_head_path=$(git rev-parse --git-path FETCH_HEAD)
+    local bak_fetch_head=0
+    [[ -f "$fetch_head_path" ]] && cp "$fetch_head_path" "${fetch_head_path}.bak" && bak_fetch_head=1
+
+    { "$@" } always {
+        if [[ $bak_fetch_head -eq 1 ]]; then
+            mv "${fetch_head_path}.bak" "$fetch_head_path"
+        else
+            rm -f "$fetch_head_path"
+        fi
+    }
+}
+
+function push_stock() {
+    local id="$1"
+    echo "${INFO}: Pushing to ${PROJECT_ID}/${id}"
+
+    if git push "$STOCK_REPO" "stash@{0}:${REMOTE_REF}/${id}" --force &> /dev/null; then
+        git stash drop &> /dev/null
+    else
+        echo "${ERROR}: Failed to push stock ${id}." >&2
+        exit 1
+    fi
+}
+
+function fetch_stock() {
+    local target_id="$1"
+    local ref="${REMOTE_REF}/${target_id}"
+    echo "${INFO}: Fetching stock ${target_id}..."
+
+    if ! git fetch "$STOCK_REPO" "$ref" &> /dev/null; then
+        echo "${ERROR}: Failed to fetch stock ${target_id}." >&2
+        return 1
+    fi
+}
+
+function drop_stock() {
+    local target_id="$1"
+    local ref="${REMOTE_REF}/${target_id}"
+    echo "${INFO}: Dropping stock ${target_id}..."
+
+    if ! git push "$STOCK_REPO" --delete "$ref" &> /dev/null; then
+        echo "${ERROR}: Failed to drop stock ${target_id}." >&2
+        return 1
+    fi
+}
+
+function create_stash_from_fetch_head() {
+    IFS=' ' read -r stash_sha stash_msg <<< $(git show -s --format="%H %s" FETCH_HEAD)
+    git stash store -m "$stash_msg" "$stash_sha"
+}
+
+function pop_stash() {
+    local target_id="$1"
+    echo "${INFO}: Applying stock ${target_id}..."
+
+    if ! git stash pop --index; then
+        echo "${ERROR}: Conflict detected." >&2
+        echo "${INFO}: The stock is kept at local stash@{0}."
+        return 1
+    fi
+}
+
+# Commands
+function command_push() {
+    local output=$(git stash push -m ${ARGS[1]:-"(No Message)"})
+    echo $output
+    [[ "$output" == *"No local changes"* ]] && exit 0
+    ensure_cache
+    push_stock $(get_next_id) || exit 1
+}
+
+function command_apply() {
+    preserve_fetch_head function {
+        ensure_cache
+        local target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
+        fetch_stock $target_id || return 1
+        create_stash_from_fetch_head
+        pop_stash $target_id || return 1
+    }
+}
+
+function command_drop() {
+    local target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
+    drop_stock $target_id || exit 1
+}
+
+function command_pop() {
+    preserve_fetch_head function {
+        ensure_cache
+        local target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
+        fetch_stock $target_id || return 1
+        create_stash_from_fetch_head
+        pop_stash $target_id || return 1
+
+        if ! drop_stock $target_id; then
+            echo "${INFO}: Stock already applied, you can manually drop it with: 'git stock drop ${target_id}'."
+            return 1
+        fi
+    }
+}
+
+function command_branch() {
+    local branch_name="${ARGS[1]:-}"
+    local input_id="${ARGS[2]:-}"
+
+    # check arguments
+    if [[ -z "$branch_name" ]]; then
+        echo "${ERROR}: Branch name is required." >&2
+        echo "${INFO}: Usage: git stock branch <new_branch_name> [id]"
+        return 1
+    fi
+
+    if git show-ref --verify --quiet "refs/heads/$branch_name"; then
+        echo "${ERROR}: Branch '${branch_name}' already exists." >&2
+        return 1
+    fi
+
+    preserve_fetch_head function {
+        ensure_cache
+        local target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
+        fetch_stock $target_id || return 1
+
+        # Design: Stash objects are merge commits.
+        # Parent 1 (^1) is the commit HEAD was at when stashed.
+        # Parent 2 (^2) is the index state.
+        local base_commit=$(git rev-parse FETCH_HEAD^1)
+        echo "${INFO}: Creating branch '${branch_name}' from base commit..."
+
+        # Check if base commit exists locally, if not, we might need to fetch more depth
+        # but usually, user has the history.
+        if ! git checkout -b "$branch_name" "$base_commit"; then
+             echo "${ERROR}: Failed to create branch. Base commit might be missing." >&2
+             return 1
+        fi
+
+        create_stash_from_fetch_head
+        pop_stash $target_id || return 1
+
+        if ! drop_stock $target_id; then
+            echo "${INFO}: Stock already applied, you can manually drop it with: 'git stock drop ${target_id}'."
+            return 1
+        fi
+    }
+}
+
+function command_list() {
+    ensure_cache
+
+    local output=$(git --git-dir="$CACHE_DIR" for-each-ref \
+        --sort=-committerdate \
+        --format="%(refname:short)|%(committerdate:relative)|%(subject)" \
+        "${REMOTE_REF}/*")
+
+    if [[ -z "$output" ]]; then
+        echo "${INFO}: No stocks found for ${PROJECT_ID}."
+        return
+    fi
+
+    echo "$output" | while IFS='|' read -r ref date msg; do
+        local short_id="${ref#${PROJECT_ID}/}"
+        printf "${YELLOW}%-4s${NC}  ${BLUE}%-14s${NC}  %s\n" "$short_id" "$date" "$msg"
+    done
+}
+
+function command_clear() {
+    ensure_cache
+
+    local branches
+    branches=$(git --git-dir="$CACHE_DIR" for-each-ref --format='%(refname:short)' "${REMOTE_REF}/*")
+
+    if [[ -z "$branches" ]]; then
+        echo "${INFO}: No stocks found for ${PROJECT_ID}."
+        return
+    fi
+
+    for branch in ${(f)branches}; do
+        if ! git push "$STOCK_REPO" --delete "$branch" &> /dev/null; then
+            echo "${ERROR}: Failed to drop stock ${branch}." >&2
+        fi
+    done
+}
+
+function command_show() {
+    local show_patch=0
+    local input_id=""
+
+    # Argument parsing to support flags
+    for arg in "${ARGS[@]}"; do
+        if [[ "$arg" == "-p" || "$arg" == "--patch" ]]; then
+            show_patch=1
+        elif [[ "$arg" != "show" ]]; then
+            # Assuming any non-flag argument after 'show' is the ID
+            input_id="$arg"
+        fi
+    done
+
+    preserve_fetch_head function {
+        ensure_cache
+        local target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
+        fetch_stock $target_id || return 1
+
+        if [[ $show_patch -eq 1 ]]; then
+            git stash show -p --color=auto FETCH_HEAD
+        else
+            git stash show --color=auto FETCH_HEAD
+        fi
+    }
+}
+
+function command_diff() {
+    preserve_fetch_head function {
+        ensure_cache
+        local target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
+        fetch_stock $target_id || return 1
+        git diff --color=auto HEAD..FETCH_HEAD
+    }
+}
+
+function command_amend() {
+    ensure_cache
+
+    # if first arg is integer, treat it as target id,
+    # otherwise treat it as message and update latest$STOCK
+    local target_id
+    local new_msg
+
+    if [[ "${ARGS[1]:-}" =~ ^[0-9]+$ ]]; then
+        if ! target_id=$(resolve_target_id "${ARGS[1]}"); then return 1; fi
+        new_msg="${ARGS[2]:-}"
+    else
+        if ! target_id=$(resolve_target_id); then return 1; fi
+        new_msg="${ARGS[1]:-}"
+    fi
+
+    # check message not empty
+    if [[ -z "$new_msg" ]]; then
+        echo "${ERROR}: Message cannot be empty." >&2
+        echo "${INFO}: Usage: git stock amend [id] <message>"
+        return 1
+    fi
+
+    # build new commit object (amend message)
+    echo "${INFO}: Amending message for stock ${target_id}..."
+    local ref="${REMOTE_REF}/${target_id}"
+    local commit_sha=$(git --git-dir="$CACHE_DIR" rev-parse "$ref")
+    local tree_sha=$(git --git-dir="$CACHE_DIR" show -s --format="%T" "$commit_sha")
+    local parent_shas=($(git --git-dir="$CACHE_DIR" show -s --format="%P" "$commit_sha"))
+    local parent_args=()
+    local new_commit_sha
+
+    for p in $parent_shas; do
+        parent_args+=("-p" "$p")
+    done
+
+    # because we are work in cache repo and cache repo exists doesn't always mean that 'user.email' and 'user.name' are exists,
+    # we have to inject it here to ensure 'commit-tree' can work properly.
+    if ! new_commit_sha=$(git -c user.email="$(git config get user.email)" \
+        -c user.name="$(git config get user.name)" \
+        --git-dir="$CACHE_DIR" commit-tree "$tree_sha" "${parent_args[@]}" -m "$new_msg"); then
+        echo "${ERROR}: Failed to amend message for stock ${target_id}." >&2
+        return 1
+    fi
+
+    if git --git-dir="$CACHE_DIR" push origin "${new_commit_sha}:${ref}" --force &> /dev/null; then
+         git --git-dir="$CACHE_DIR" update-ref "$ref" "$new_commit_sha"
+    else
+         echo "${ERROR}: Failed to push update to remote." >&2
+         return 1
+    fi
+}
+
+function command_fetch() {
+    preserve_fetch_head function {
+        ensure_cache
+        local target_ids=$(resolve_target_id "${ARGS[1]:-}") || return 1
+        local is_batch=0
+        [[ "${ARGS[1]:-}" == "all" ]] && is_batch=1
+        [[ $is_batch -eq 1 ]] && echo "${INFO}: Fetching all stocks for ${PROJECT_ID}..."
+
+        for id in ${(f)target_ids}; do
+            if ! fetch_stock "$id"; then
+                [[ $is_batch -eq 0 ]] && return 1
+                continue
+            fi
+
+            create_stash_from_fetch_head
+            [[ $is_batch -eq 0 ]] && echo "${INFO}: Stock ${id} saved to stash@{0}."
+        done
+    }
+}
+
+function command_cache_prune() {
+    ensure_cache
+    echo "${INFO}: Pruning cache repository..."
+    
+    if ! git --git-dir="$CACHE_DIR" gc --prune=now; then
+        echo "${ERROR}: Failed to prune cache." >&2
+        return 1
+    fi
+}
+
+function command_cache() {
+    local sub_command="${ARGS[1]:-}"
+
+    if [[ ${#ARGS[@]} -gt 0 ]]; then
+        shift ARGS
+    fi
+
+    case "$sub_command" in
+        prune)
+            command_cache_prune
+            ;;
+        *)
+            echo "${ERROR}: Missing or invalid subcommand for 'cache'." >&2
+            echo "${INFO}: Usage: git stock cache <subcommand>"
+            echo "${INFO}: Available subcommands: prune"
+            return 1
+            ;;
+    esac
+}
+
+# Main
+ARGS=($@)
+
+case "${ARGS[1]:-}" in
+    # Checklist: Update this list after add new command
+    push|apply|pop|branch|drop|list|clear|show|diff|amend|fetch|cache)
+        COMMAND="${ARGS[1]}"
+        shift ARGS
+        ;;
+    *)
+        COMMAND="push"
+        ;;
+esac
+
+case "$COMMAND" in
+    push)
+        command_push
+        ;;
+    apply)
+        command_apply
+        ;;
+    pop)
+        command_pop
+        ;;
+    branch)
+        command_branch
+        ;;
+    drop)
+        command_drop
+        ;;
+    list)
+        command_list
+        ;;
+    clear)
+        command_clear
+        ;;
+    show)
+        command_show
+        ;;
+    diff)
+        command_diff
+        ;;
+    amend)
+        command_amend
+        ;;
+    fetch)
+        command_fetch
+        ;;
+    cache)
+        command_cache
+        ;;
+    *)
+        command_push
+        ;;
+esac
