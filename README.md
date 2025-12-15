@@ -6,6 +6,25 @@ It simplifies transferring work-in-progress between machines without creating te
 
 Think of it as a shared, multi-machine `git stash`.
 
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+  - [push](#push-message)
+  - [list](#list)
+  - [apply](#apply-id)
+  - [pop](#pop-id)
+  - [fetch](#fetch-idall)
+  - [drop](#drop-id)
+  - [show](#show-id--p----patch)
+  - [diff](#diff-id)
+  - [branch](#branch-new_branch_name-id)
+  - [amend](#amend-id-message)
+  - [clear](#clear)
+  - [cache](#cache)
+
 ## Features
 
 - **Remote Storage**: Stocks are pushed to a central repository, accessible from any machine.
