@@ -1,8 +1,8 @@
 # git-stock
 
-A git extension that allows you to "stock" your uncommitted changes to a remote Git repository.
+A Git extension that allows you to "stock" uncommitted changes to a **separate** remote repository.
 
-Makes it easy to transfer your work-in-progress between different machines or share it with others without creating temporary branches.
+It simplifies transferring work-in-progress between machines without creating temporary branches. By offloading changes to a dedicated repository, it ensures your current project remains unpolluted.
 
 Think of it as a shared, multi-machine `git stash`.
 
@@ -17,11 +17,13 @@ Think of it as a shared, multi-machine `git stash`.
 ## Installation
 
 1. **Download the script**
+
     ```bash
     curl -fsSLO https://raw.githubusercontent.com/Euxcbsks/git-stock/main/git-stock
     ```
 
 2. **Make it executable**
+
     ```bash
     chmod +x git-stock
     ```
@@ -38,21 +40,21 @@ As long as `git-stock` is in your `PATH`, `git` will recognize it as an extensio
 
 ## Configuration
 
-Before you can use `git-stock`, you must have a remote, **bare** repository where you want to store your stocks.
+A remote **bare** repository is required to use `git-stock`. You may create a new dedicated GitHub repository or use an existing one.
 
-You can create a new dedicated GitHub repository or use an existing one.
-
-Then set the `stock.repo` option to your bare repository url.
+To configure, set the `stock.repo` option to your repository URL:
 
 ```bash
 git config set --global stock.repo <your-bare-repo-url>
 ```
 
+> **Note**: Only SSH URLs are supported.
+
 ## Usage
 
 ### `push [<message>]`
 
-Stashes the current changes and pushes them as a new stock to the remote repository.
+Stashes local changes and uploads them to the remote repository.
 
 ```bash
 # Push with an auto-generated message
@@ -62,13 +64,11 @@ git stock push
 git stock push "My work on the new feature"
 ```
 
-Same as `git stash`, this command won't run `git add` automatically by default.
+- Default Alias: push is the default action. Running git stock or git stock "message" is equivalent to the commands above.
 
-And if there are no local changes, the command will do nothing.
+- Staging: Like git stash, untracked files are excluded unless explicitly staged.
 
-Also, this is the default command, so you can use `git stock` to stock your changes, this is same as `git stock push`.
-
-And custom message also works with `git stock "Another work on the new feature"`.
+- Empty State: The command performs no action if there are no local changes.
 
 ### `list`
 
@@ -85,7 +85,7 @@ git stock list
 
 ### `apply [<id>]`
 
-Applies a stock to the current working directory, leaving the stock on the remote.
+Applies a stock to the working directory while **keeping** it in the remote repository.
 
 ```bash
 # Apply the latest stock
@@ -97,7 +97,7 @@ git stock apply 3
 
 ### `pop [<id>]`
 
-Applies a stock to the current working directory and **removes** it from the remote repository upon success.
+Applies a stock to the working directory and removes it from the remote repository.
 
 ```bash
 # Pop the latest stock
@@ -109,7 +109,7 @@ git stock pop 3
 
 ### `fetch [<id>|all]`
 
-Fetches remote stock and saves it to your local `git stash list`.
+Downloads remote stock(s) into the local git stash list.
 
 ```bash
 # Fetch the latest stock into local stash list
@@ -118,7 +118,7 @@ git stock fetch
 # Fetch a specific stock by ID
 git stock fetch 2
 
-# Pull all stocks
+# Fetch all stocks
 git stock fetch all
 ```
 
@@ -136,7 +136,7 @@ git stock drop 2
 
 ### `show [<id>] [-p | --patch]`
 
-Shows the summary or patch of a stock.
+Displays the summary or full patch diff of a stock.
 
 ```bash
 # Show summary of the latest stock
@@ -165,7 +165,7 @@ git stock diff 2
 
 ### `branch <new_branch_name> [<id>]`
 
-Creates a new branch from a stock and then applies the stashed changes. This is useful for turning a work-in-progress into a formal branch.
+Creates and checks out a new branch, then applies the specified stock. Useful for promoting WIP changes to a formal feature branch.
 
 ```bash
 # Create a branch 'feature/new-login' from the latest stock
@@ -177,7 +177,7 @@ git stock branch feature/new-login 2
 
 ### `amend [<id>] <message>`
 
-Amends the message of a stock.
+Updates the message of an existing stock.
 
 ```bash
 # Amend the latest stock's message
@@ -189,7 +189,9 @@ git stock amend 3 "Another descriptive message"
 
 ### `clear`
 
-Removes **all** stocks for the current project from the remote repository. Won't confirm, use with caution.
+Removes **all** stocks for the current project from the remote repository.
+
+> **Warning**: This action is immediate and requires no confirmation.
 
 ```bash
 git stock clear
@@ -197,7 +199,7 @@ git stock clear
 
 ### `cache`
 
-Manages the local cache.
+Manages the internal local cache repository.
 
 ```bash
 # Prune and garbage-collect the local cache repository
