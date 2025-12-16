@@ -24,6 +24,7 @@ Think of it as a shared, multi-machine `git stash`.
   - [amend](#amend-id-message)
   - [clear](#clear)
   - [cache](#cache)
+- [Disclaimer](#disclaimer)
 
 ## Features
 
@@ -224,3 +225,12 @@ Manages the internal local cache repository.
 # Prune and garbage-collect the local cache repository
 git stock cache prune
 ```
+
+## Disclaimer
+
+**No Warranty**: `git-stock` is provided "as is," without warranty of any kind, express or implied. The authors and contributors are not liable for any damages or data loss arising from the use of this software.
+
+**Usage Warnings**:
+* **Data Loss**: Commands like `git stock clear` are destructive and immediate. Always ensure you have backups or have pushed critical commits before performing bulk operations.
+* **Remote Security**: This tool uploads uncommitted code to the repository defined in `stock.repo`. It is the user's responsibility to ensure this remote repository is private and secure. Using a public repository configuration will expose your work-in-progress to the public.
+* **Experimental Nature**: This is a third-party Git extension. While designed to be safe, edge cases in network connectivity or Git versions may produce unexpected results.
