@@ -197,13 +197,14 @@ function command_push() {
 }
 
 function command_apply() {
-    preserve_fetch_head function {
+    function _apply() {
         ensure_cache
         local target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
         fetch_stock $target_id || return 1
         create_stash_from_fetch_head
         pop_stash $target_id || return 1
     }
+    preserve_fetch_head _apply
 }
 
 function command_drop() {
@@ -212,7 +213,7 @@ function command_drop() {
 }
 
 function command_pop() {
-    preserve_fetch_head function {
+    function _pop() {
         ensure_cache
         local target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
         fetch_stock $target_id || return 1
@@ -224,6 +225,7 @@ function command_pop() {
             return 1
         fi
     }
+    preserve_fetch_head _pop
 }
 
 function command_branch() {
@@ -242,7 +244,7 @@ function command_branch() {
         return 1
     fi
 
-    preserve_fetch_head function {
+    function _branch() {
         ensure_cache
         local target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
         fetch_stock $target_id || return 1
@@ -268,6 +270,7 @@ function command_branch() {
             return 1
         fi
     }
+    preserve_fetch_head _branch
 }
 
 function command_list() {
@@ -321,7 +324,7 @@ function command_show() {
         fi
     done
 
-    preserve_fetch_head function {
+    function _show() {
         ensure_cache
         local target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
         fetch_stock $target_id || return 1
@@ -332,15 +335,17 @@ function command_show() {
             git stash show --color=auto FETCH_HEAD
         fi
     }
+    preserve_fetch_head _show
 }
 
 function command_diff() {
-    preserve_fetch_head function {
+    function _diff() {
         ensure_cache
         local target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
         fetch_stock $target_id || return 1
         git diff --color=auto HEAD..FETCH_HEAD
     }
+    preserve_fetch_head _diff
 }
 
 function command_amend() {
@@ -397,7 +402,7 @@ function command_amend() {
 }
 
 function command_fetch() {
-    preserve_fetch_head function {
+    function _fetch() {
         ensure_cache
         local target_ids=$(resolve_target_id "${ARGS[1]:-}") || return 1
         local is_batch=0
@@ -414,6 +419,7 @@ function command_fetch() {
             [[ $is_batch -eq 0 ]] && echo "${INFO}: Stock ${id} saved to stash@{0}."
         done
     }
+    preserve_fetch_head _fetch
 }
 
 function command_cache_prune() {
