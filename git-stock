@@ -195,7 +195,8 @@ function command_push() {
 function command_apply() {
     function _apply() {
         ensure_cache
-        local target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
+        local target_id
+        target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
         fetch_stock $target_id || return 1
         create_stash_from_fetch_head
         pop_stash $target_id || return 1
@@ -204,14 +205,16 @@ function command_apply() {
 }
 
 function command_drop() {
-    local target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
+    local target_id
+    target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
     drop_stock $target_id || return 1
 }
 
 function command_pop() {
     function _pop() {
         ensure_cache
-        local target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
+        local target_id
+        target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
         fetch_stock $target_id || return 1
         create_stash_from_fetch_head
         pop_stash $target_id || return 1
@@ -322,7 +325,8 @@ function command_show() {
 
     function _show() {
         ensure_cache
-        local target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
+        local target_id
+        target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
         fetch_stock $target_id || return 1
 
         if [[ $show_patch -eq 1 ]]; then
@@ -337,7 +341,8 @@ function command_show() {
 function command_diff() {
     function _diff() {
         ensure_cache
-        local target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
+        local target_id
+        target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
         fetch_stock $target_id || return 1
         git diff --color=auto HEAD..FETCH_HEAD
     }
@@ -400,7 +405,8 @@ function command_amend() {
 function command_fetch() {
     function _fetch() {
         ensure_cache
-        local target_ids=$(resolve_target_id "${ARGS[1]:-}") || return 1
+        local target_ids
+        target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
         local is_batch=0
         [[ "${ARGS[1]:-}" == "all" ]] && is_batch=1
         [[ $is_batch -eq 1 ]] && echo "${INFO}: Fetching all stocks for ${PROJECT_ID}..." >&2
