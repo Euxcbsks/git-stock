@@ -16,7 +16,7 @@ readonly INFO="${BLUE}Info${NC}"
 # Check
 if ! git rev-parse --is-inside-work-tree &> /dev/null; then
     echo "${ERROR}: Not a git repository." >&2
-    exit 1
+    return 1
 fi
 
 readonly STOCK_REPO=$(git config get stock.repo)
@@ -24,21 +24,21 @@ readonly STOCK_REPO=$(git config get stock.repo)
 if [[ -z "$STOCK_REPO" ]]; then
     echo "${ERROR}: 'stock.repo' is not set." >&2
     echo "${INFO}: Set it with 'git config set stock.repo <repo_url>'."
-    exit 1
+    return 1
 fi
 
 readonly ORIGIN_URL="$(git remote get-url origin 2> /dev/null)"
 
 if [[ -z "$ORIGIN_URL" ]]; then
     echo "${ERROR}: This repository has no remote 'origin'." >&2
-    exit 1
+    return 1
 fi
 
 readonly PROJECT_ID="$(echo $ORIGIN_URL | sed -n 's/.*:\([^.]*\)\..*/\1/p')"
 
 if [[ -z "$PROJECT_ID" ]]; then
     echo "${ERROR}: Could not extract Owner/Repository name from origin URL." >&2
-    exit 1
+    return 1
 fi
 
 readonly REMOTE_REF="refs/heads/${PROJECT_ID}"
@@ -145,7 +145,7 @@ function push_stock() {
         git stash drop &> /dev/null
     else
         echo "${ERROR}: Failed to push stock ${id}." >&2
-        exit 1
+        return 1
     fi
 }
 
@@ -191,9 +191,9 @@ function pop_stash() {
 function command_push() {
     local output=$(git stash push -m ${ARGS[1]:-"(No Message)"})
     echo $output
-    [[ "$output" == *"No local changes"* ]] && exit 0
+    [[ "$output" == *"No local changes"* ]] && return 0
     ensure_cache
-    push_stock $(get_next_id) || exit 1
+    push_stock $(get_next_id) || return 1
 }
 
 function command_apply() {
@@ -209,7 +209,7 @@ function command_apply() {
 
 function command_drop() {
     local target_id=$(resolve_target_id "${ARGS[1]:-}") || return 1
-    drop_stock $target_id || exit 1
+    drop_stock $target_id || return 1
 }
 
 function command_pop() {
