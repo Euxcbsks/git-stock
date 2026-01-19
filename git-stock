@@ -461,8 +461,12 @@ case "${ARGS[1]:-}" in
         COMMAND="${ARGS[1]}"
         shift ARGS
         ;;
-    *)
+    "")
         COMMAND="push"
+        ;;
+    *)
+        echo "${ERROR}: subcommand wasn't specified; 'push' can't be assumed due to unexpected token '${ARGS[1]}'"
+        return 1
         ;;
 esac
 
@@ -502,8 +506,5 @@ case "$COMMAND" in
         ;;
     cache)
         command_cache
-        ;;
-    *)
-        command_push
         ;;
 esac

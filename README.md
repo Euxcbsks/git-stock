@@ -84,7 +84,7 @@ git stock push
 git stock push "My work on the new feature"
 ```
 
-- Default Alias: push is the default action. Running git stock or git stock "message" is equivalent to the commands above.
+- Default Alias: push is the default action. Running `git stock` is equal to `git stock push`.
 
 - Staging: Like git stash, untracked files are excluded unless explicitly staged.
 
