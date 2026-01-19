@@ -23,7 +23,7 @@ readonly STOCK_REPO=$(git config get stock.repo)
 
 if [[ -z "$STOCK_REPO" ]]; then
     echo "${ERROR}: 'stock.repo' is not set." >&2
-    echo "${INFO}: Set it with 'git config set stock.repo <repo_url>'."
+    echo "${INFO}: Set it with 'git config set stock.repo <repo_url>'." >&2
     return 1
 fi
 
@@ -46,10 +46,10 @@ readonly REMOTE_REF="refs/heads/${PROJECT_ID}"
 # Utils
 function ensure_cache() {
     if [[ ! -d "$CACHE_DIR" ]]; then
-        echo "${INFO}: Cloning stock repo to ${CACHE_DIR}..."
+        echo "${INFO}: Cloning stock repo to ${CACHE_DIR}..." >&2
         git clone --bare "$STOCK_REPO" "$CACHE_DIR" &> /dev/null
     else
-        echo "${INFO}: Updating cache..."
+        echo "${INFO}: Updating cache..." >&2
         # Ensure cache remote url sync with `$STOCK_REPO`
         git --git-dir="$CACHE_DIR" remote set-url origin "$STOCK_REPO" &> /dev/null
         git --git-dir="$CACHE_DIR" fetch --prune origin "+${REMOTE_REF}/*:${REMOTE_REF}/*" &> /dev/null
@@ -139,7 +139,7 @@ function preserve_fetch_head() {
 
 function push_stock() {
     local id="$1"
-    echo "${INFO}: Pushing to ${PROJECT_ID}/${id}"
+    echo "${INFO}: Pushing to ${PROJECT_ID}/${id}" >&2
 
     if git push "$STOCK_REPO" "stash@{0}:${REMOTE_REF}/${id}" --force &> /dev/null; then
         git stash drop &> /dev/null
@@ -152,7 +152,7 @@ function push_stock() {
 function fetch_stock() {
     local target_id="$1"
     local ref="${REMOTE_REF}/${target_id}"
-    echo "${INFO}: Fetching stock ${target_id}..."
+    echo "${INFO}: Fetching stock ${target_id}..." >&2
 
     if ! git fetch "$STOCK_REPO" "$ref" &> /dev/null; then
         echo "${ERROR}: Failed to fetch stock ${target_id}." >&2
@@ -163,7 +163,7 @@ function fetch_stock() {
 function drop_stock() {
     local target_id="$1"
     local ref="${REMOTE_REF}/${target_id}"
-    echo "${INFO}: Dropping stock ${target_id}..."
+    echo "${INFO}: Dropping stock ${target_id}..." >&2
 
     if ! git push "$STOCK_REPO" --delete "$ref" &> /dev/null; then
         echo "${ERROR}: Failed to drop stock ${target_id}." >&2
@@ -178,11 +178,11 @@ function create_stash_from_fetch_head() {
 
 function pop_stash() {
     local target_id="$1"
-    echo "${INFO}: Applying stock ${target_id}..."
+    echo "${INFO}: Applying stock ${target_id}..." >&2
 
     if ! git stash pop --index; then
         echo "${ERROR}: Conflict detected." >&2
-        echo "${INFO}: The stock is kept at local stash@{0}."
+        echo "${INFO}: The stock is kept at local stash@{0}." >&2
         return 1
     fi
 }
@@ -190,7 +190,7 @@ function pop_stash() {
 # Commands
 function command_push() {
     local output=$(git stash push -m ${ARGS[1]:-"(No Message)"})
-    echo $output
+    echo $output >&2
     [[ "$output" == *"No local changes"* ]] && return 0
     ensure_cache
     push_stock $(get_next_id) || return 1
@@ -221,7 +221,7 @@ function command_pop() {
         pop_stash $target_id || return 1
 
         if ! drop_stock $target_id; then
-            echo "${INFO}: Stock already applied, you can manually drop it with: 'git stock drop ${target_id}'."
+            echo "${INFO}: Stock already applied, you can manually drop it with: 'git stock drop ${target_id}'." >&2
             return 1
         fi
     }
@@ -235,7 +235,7 @@ function command_branch() {
     # check arguments
     if [[ -z "$branch_name" ]]; then
         echo "${ERROR}: Branch name is required." >&2
-        echo "${INFO}: Usage: git stock branch <new_branch_name> [id]"
+        echo "${INFO}: Usage: git stock branch <new_branch_name> [id]" >&2
         return 1
     fi
 
@@ -253,7 +253,7 @@ function command_branch() {
         # Parent 1 (^1) is the commit HEAD was at when stashed.
         # Parent 2 (^2) is the index state.
         local base_commit=$(git rev-parse FETCH_HEAD^1)
-        echo "${INFO}: Creating branch '${branch_name}' from base commit..."
+        echo "${INFO}: Creating branch '${branch_name}' from base commit..." >&2
 
         # Check if base commit exists locally, if not, we might need to fetch more depth
         # but usually, user has the history.
@@ -266,7 +266,7 @@ function command_branch() {
         pop_stash $target_id || return 1
 
         if ! drop_stock $target_id; then
-            echo "${INFO}: Stock already applied, you can manually drop it with: 'git stock drop ${target_id}'."
+            echo "${INFO}: Stock already applied, you can manually drop it with: 'git stock drop ${target_id}'." >&2
             return 1
         fi
     }
@@ -282,7 +282,7 @@ function command_list() {
         "${REMOTE_REF}/*")
 
     if [[ -z "$output" ]]; then
-        echo "${INFO}: No stocks found for ${PROJECT_ID}."
+        echo "${INFO}: No stocks found for ${PROJECT_ID}." >&2
         return
     fi
 
@@ -299,7 +299,7 @@ function command_clear() {
     branches=$(git --git-dir="$CACHE_DIR" for-each-ref --format='%(refname:short)' "${REMOTE_REF}/*")
 
     if [[ -z "$branches" ]]; then
-        echo "${INFO}: No stocks found for ${PROJECT_ID}."
+        echo "${INFO}: No stocks found for ${PROJECT_ID}." >&2
         return
     fi
 
@@ -367,12 +367,12 @@ function command_amend() {
     # check message not empty
     if [[ -z "$new_msg" ]]; then
         echo "${ERROR}: Message cannot be empty." >&2
-        echo "${INFO}: Usage: git stock amend [id] <message>"
+        echo "${INFO}: Usage: git stock amend [id] <message>" >&2
         return 1
     fi
 
     # build new commit object (amend message)
-    echo "${INFO}: Amending message for stock ${target_id}..."
+    echo "${INFO}: Amending message for stock ${target_id}..." >&2
     local ref="${REMOTE_REF}/${target_id}"
     local commit_sha=$(git --git-dir="$CACHE_DIR" rev-parse "$ref")
     local tree_sha=$(git --git-dir="$CACHE_DIR" show -s --format="%T" "$commit_sha")
@@ -407,7 +407,7 @@ function command_fetch() {
         local target_ids=$(resolve_target_id "${ARGS[1]:-}") || return 1
         local is_batch=0
         [[ "${ARGS[1]:-}" == "all" ]] && is_batch=1
-        [[ $is_batch -eq 1 ]] && echo "${INFO}: Fetching all stocks for ${PROJECT_ID}..."
+        [[ $is_batch -eq 1 ]] && echo "${INFO}: Fetching all stocks for ${PROJECT_ID}..." >&2
 
         for id in ${(f)target_ids}; do
             if ! fetch_stock "$id"; then
@@ -416,7 +416,7 @@ function command_fetch() {
             fi
 
             create_stash_from_fetch_head
-            [[ $is_batch -eq 0 ]] && echo "${INFO}: Stock ${id} saved to stash@{0}."
+            [[ $is_batch -eq 0 ]] && echo "${INFO}: Stock ${id} saved to stash@{0}." >&2
         done
     }
     preserve_fetch_head _fetch
@@ -424,7 +424,7 @@ function command_fetch() {
 
 function command_cache_prune() {
     ensure_cache
-    echo "${INFO}: Pruning cache repository..."
+    echo "${INFO}: Pruning cache repository..." >&2
     
     if ! git --git-dir="$CACHE_DIR" gc --prune=now; then
         echo "${ERROR}: Failed to prune cache." >&2
@@ -445,8 +445,8 @@ function command_cache() {
             ;;
         *)
             echo "${ERROR}: Missing or invalid subcommand for 'cache'." >&2
-            echo "${INFO}: Usage: git stock cache <subcommand>"
-            echo "${INFO}: Available subcommands: prune"
+            echo "${INFO}: Usage: git stock cache <subcommand>" >&2
+            echo "${INFO}: Available subcommands: prune" >&2
             return 1
             ;;
     esac
