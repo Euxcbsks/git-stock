@@ -2,16 +2,16 @@
 set -o nounset
 
 # Setup
-CACHE_DIR="${HOME}/.cache/git-stock"
+readonly CACHE_DIR="${HOME}/.cache/git-stock"
 
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+readonly RED='\033[0;31m'
+readonly YELLOW='\033[1;33m'
+readonly BLUE='\033[0;34m'
+readonly NC='\033[0m'
 
-ERROR="${RED}Error${NC}"
-WARNING="${YELLOW}Warning${NC}"
-INFO="${BLUE}Info${NC}"
+readonly ERROR="${RED}Error${NC}"
+readonly WARNING="${YELLOW}Warning${NC}"
+readonly INFO="${BLUE}Info${NC}"
 
 # Check
 if ! git rev-parse --is-inside-work-tree &> /dev/null; then
@@ -19,7 +19,7 @@ if ! git rev-parse --is-inside-work-tree &> /dev/null; then
     exit 1
 fi
 
-STOCK_REPO=$(git config get stock.repo)
+readonly STOCK_REPO=$(git config get stock.repo)
 
 if [[ -z "$STOCK_REPO" ]]; then
     echo "${ERROR}: 'stock.repo' is not set." >&2
@@ -27,21 +27,21 @@ if [[ -z "$STOCK_REPO" ]]; then
     exit 1
 fi
 
-ORIGIN_URL=$(git remote get-url origin 2> /dev/null)
+readonly ORIGIN_URL="$(git remote get-url origin 2> /dev/null)"
 
 if [[ -z "$ORIGIN_URL" ]]; then
     echo "${ERROR}: This repository has no remote 'origin'." >&2
     exit 1
 fi
 
-PROJECT_ID=$(echo $ORIGIN_URL | sed -n 's/.*:\([^.]*\)\..*/\1/p')
+readonly PROJECT_ID="$(echo $ORIGIN_URL | sed -n 's/.*:\([^.]*\)\..*/\1/p')"
 
 if [[ -z "$PROJECT_ID" ]]; then
     echo "${ERROR}: Could not extract Owner/Repository name from origin URL." >&2
     exit 1
 fi
 
-REMOTE_REF="refs/heads/${PROJECT_ID}"
+readonly REMOTE_REF="refs/heads/${PROJECT_ID}"
 
 # Utils
 function ensure_cache() {
