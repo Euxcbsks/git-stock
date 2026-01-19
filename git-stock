@@ -124,12 +124,12 @@ function resolve_target_id() {
 }
 
 function preserve_fetch_head() {
-    local fetch_head_path=$(git rev-parse --git-path FETCH_HEAD)
+    local fetch_head_path="$(git rev-parse --git-path FETCH_HEAD)"
     local bak_fetch_head=0
     [[ -f "$fetch_head_path" ]] && cp "$fetch_head_path" "${fetch_head_path}.bak" && bak_fetch_head=1
 
     { "$@" } always {
-        if [[ $bak_fetch_head -eq 1 ]]; then
+        if [[ "$bak_fetch_head" -eq 1 ]]; then
             mv "${fetch_head_path}.bak" "$fetch_head_path"
         else
             rm -f "$fetch_head_path"
@@ -189,7 +189,7 @@ function pop_stash() {
 
 # Commands
 function command_push() {
-    local output=$(git stash push -m ${ARGS[1]:-"(No Message)"})
+    local output="$(git stash push -m ${ARGS[1]:-"(No Message)"})"
     echo $output >&2
     [[ "$output" == *"No local changes"* ]] && return 0
     ensure_cache
@@ -276,10 +276,10 @@ function command_branch() {
 function command_list() {
     ensure_cache
 
-    local output=$(git --git-dir="$CACHE_DIR" for-each-ref \
+    local output="$(git --git-dir="$CACHE_DIR" for-each-ref \
         --sort=-committerdate \
         --format="%(refname:short)|%(committerdate:relative)|%(subject)" \
-        "${REMOTE_REF}/*")
+        "${REMOTE_REF}/*")"
 
     if [[ -z "$output" ]]; then
         echo "${INFO}: No stocks found for ${PROJECT_ID}." >&2
@@ -296,7 +296,7 @@ function command_clear() {
     ensure_cache
 
     local branches
-    branches=$(git --git-dir="$CACHE_DIR" for-each-ref --format='%(refname:short)' "${REMOTE_REF}/*")
+    branches="$(git --git-dir="$CACHE_DIR" for-each-ref --format='%(refname:short)' "${REMOTE_REF}/*")"
 
     if [[ -z "$branches" ]]; then
         echo "${INFO}: No stocks found for ${PROJECT_ID}." >&2
