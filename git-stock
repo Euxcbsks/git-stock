@@ -465,7 +465,7 @@ case "${ARGS[1]:-}" in
         COMMAND="push"
         ;;
     *)
-        echo "${ERROR}: subcommand wasn't specified; 'push' can't be assumed due to unexpected token '${ARGS[1]}'"
+        echo "${ERROR}: subcommand wasn't specified; 'push' can't be assumed due to unexpected token '${ARGS[1]}'" >&2
         return 1
         ;;
 esac
