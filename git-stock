@@ -138,35 +138,32 @@ function preserve_fetch_head() {
 }
 
 function push_stock() {
-    local id="$1"
-    echo "${INFO}: Pushing to ${PROJECT_ID}/${id}" >&2
+    echo "${INFO}: Pushing to ${PROJECT_ID}/$1" >&2
 
-    if git push "$STOCK_REPO" "stash@{0}:${REMOTE_REF}/${id}" --force &> /dev/null; then
+    if git push "$STOCK_REPO" "stash@{0}:${REMOTE_REF}/$1" --force &> /dev/null; then
         git stash drop &> /dev/null
     else
-        echo "${ERROR}: Failed to push stock ${id}." >&2
+        echo "${ERROR}: Failed to push stock $1." >&2
         return 1
     fi
 }
 
 function fetch_stock() {
-    local target_id="$1"
-    local ref="${REMOTE_REF}/${target_id}"
-    echo "${INFO}: Fetching stock ${target_id}..." >&2
+    local ref="${REMOTE_REF}/$1"
+    echo "${INFO}: Fetching stock $1..." >&2
 
     if ! git fetch "$STOCK_REPO" "$ref" &> /dev/null; then
-        echo "${ERROR}: Failed to fetch stock ${target_id}." >&2
+        echo "${ERROR}: Failed to fetch stock $1." >&2
         return 1
     fi
 }
 
 function drop_stock() {
-    local target_id="$1"
-    local ref="${REMOTE_REF}/${target_id}"
-    echo "${INFO}: Dropping stock ${target_id}..." >&2
+    local ref="${REMOTE_REF}/$1"
+    echo "${INFO}: Dropping stock $1..." >&2
 
     if ! git push "$STOCK_REPO" --delete "$ref" &> /dev/null; then
-        echo "${ERROR}: Failed to drop stock ${target_id}." >&2
+        echo "${ERROR}: Failed to drop stock $1." >&2
         return 1
     fi
 }
@@ -177,8 +174,7 @@ function create_stash_from_fetch_head() {
 }
 
 function pop_stash() {
-    local target_id="$1"
-    echo "${INFO}: Applying stock ${target_id}..." >&2
+    echo "${INFO}: Applying stock $1..." >&2
 
     if ! git stash pop --index; then
         echo "${ERROR}: Conflict detected." >&2
